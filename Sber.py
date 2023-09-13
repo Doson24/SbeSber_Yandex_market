@@ -1,3 +1,4 @@
+import multiprocessing
 import time
 
 from driver import init_webdriver
@@ -18,19 +19,20 @@ from YandexMarket import main as get_min_price
 
 @dataclass
 class Card:
-    name: str
-    sber_url: str
-    price: str
+    name_sber: str
+    name_ya:str
+    price_sber: str
+    price_ya: str
     bonus_percentage: str
     bonus_price: str
-    yandex_price: str = 0
-    yandex_url: str = ""
+    sber_url: str
+    yandex_url: str
     # money: str
-    date_created: str = datetime.today().strftime("%d-%m-%Y")
+    date_created: str = datetime.today().strftime("%d.%m.%Y")
 
     def __str__(self):
-        return f'{self.name} {self.price} {self.bonus_percentage} ' \
-            f'{self.yandex_price}'
+        return f'{self.name_sber} {self.price_sber} {self.bonus_percentage} ' \
+            f'{self.price_ya}'
 
 
 def close_promo(driver: Chrome):
@@ -50,32 +52,40 @@ def close_promo(driver: Chrome):
 @benchmark
 def get_cards_category(driver_sber: Chrome, driver_ya, url: str, thanks_percentage: int):
     driver_sber.get(url)
+    cards_path = '//*[@class="catalog-listing__items catalog-listing__items_divider"]/div[@id]'
     cards = WebDriverWait(driver_sber, 30).until(EC.presence_of_all_elements_located(
-        (By.XPATH, '//*[@class="catalog-listing__items '
-                   'catalog-listing__items_divider"]/div[@id]')))
+        (By.XPATH, cards_path)))
     driver_sber.implicitly_wait(1)
     data = []
-    for card in cards:
-        money = WebDriverWait(card, 1).until(EC.presence_of_element_located(
-            (By.XPATH, './/*[@class="item-money"]'))).text
+    for index in range(1, len(cards)+1):
+        money = WebDriverWait(driver_sber, 1).until(EC.presence_of_element_located(
+            (By.XPATH, f'{cards_path}[{index}]//*[@class="item-money"]'))).text
         money = money.split('\n')
         try:
-            price = money[0]
+            price = money[0].replace(' ', '').replace('₽', '')
             discount_percentage = money[1]
             if int(discount_percentage[:-1]) < thanks_percentage:
                 continue
             price_discount = money[2]
         except IndexError:
             continue
-        name = WebDriverWait(card, 1).until(EC.presence_of_element_located(
-            (By.XPATH, './/*[@class="inner"]/div[@class="item-title"]'))).text
-        link = WebDriverWait(card, 1).until(EC.presence_of_element_located(
-            (By.TAG_NAME, 'a'))).get_attribute('href')
-        # Работа яднекс маркета
-        yandex_price, yandex_url = get_min_price(driver_ya, name)
+        name = WebDriverWait(driver_sber, 1).until(EC.presence_of_element_located(
+            (By.XPATH, f'{cards_path}[{index}]//*[@class="inner"]/div[@class="item-title"]'))).text
+        link = WebDriverWait(driver_sber, 1).until(EC.presence_of_element_located(
+            (By.XPATH, f'{cards_path}[{index}]//a'))).get_attribute('href')
 
-        card = Card(name, link, price, discount_percentage, price_discount,
-                    yandex_price, yandex_url
+        # Работа яднекс маркета
+        yandex_price, yandex_url, name_ya = get_min_price(driver_ya, name)
+        # yandex_price, yandex_url, name_ya = '','', name
+
+        card = Card(name_sber=name,
+                    name_ya=name_ya,
+                    sber_url=link,
+                    price_sber=price,
+                    bonus_percentage=discount_percentage,
+                    bonus_price=price_discount,
+                    price_ya=yandex_price,
+                    yandex_url=yandex_url
                     )
         # card = Card(name.text, link, money)
         print(card)
@@ -142,12 +152,13 @@ def main(url, thanks_percentage, headless=True):
             cycle += 1
             print(f'Страница №{cycle}')
 
-            data = pd.DataFrame(cards)
-            save_db(data,
-                    path='Sber.db',
-                    table_name='Sber',
-                    # print_column=['name', 'money']
-                    )
+            if len(cards) > 0:
+                data = pd.DataFrame(cards)
+                save_db(data,
+                        path='Sber.db',
+                        table_name='Sber',
+                        # print_column=['name', 'money']
+                        )
 
 
 def detect_blocked(driver_sber):
@@ -162,9 +173,19 @@ def detect_blocked(driver_sber):
 
 
 if __name__ == '__main__':
-    # url = str(input('Введите url адрес вместе с фильтрами: '))
-    # thanks_percentage = int(input("Введите мин % СберСпасибо: "))
-    # url = 'https://megamarket.ru/catalog/smartfony-android/#?filters=%7B%221B3347144BD148AF9B0CE4AFF47710F7%22%3A%5B%221%22%5D%7D'
-    url = "https://megamarket.ru/catalog/televizory/"
-    thanks_percentage = 35
+    multiprocessing.freeze_support()
+
+    url = str(input('Введите url адрес: '))
+    thanks_percentage = int(input("Введите мин % СберСпасибо: "))
+    # url = 'https://megamarket.ru/catalog/noutbuki/page-11/'
+    # url = "https://megamarket.ru/catalog/igrovye-naushniki/page-7/"
+    # thanks_percentage = 0
+    print('-'*100)
+
+
+    # try:
     main(url, thanks_percentage, False)
+    # except Exception as e:
+    #     print(e)
+    #     print(e.args)
+    #     time.sleep(360)
