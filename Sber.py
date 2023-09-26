@@ -61,14 +61,16 @@ def get_cards_category(driver_sber: Chrome, driver_ya, url: str, thanks_percenta
         money = WebDriverWait(driver_sber, 1).until(EC.presence_of_element_located(
             (By.XPATH, f'{cards_path}[{index}]//*[@class="item-money"]'))).text
         money = money.split('\n')
+        price = money[0].replace(' ', '').replace('₽', '')
         try:
-            price = money[0].replace(' ', '').replace('₽', '')
             discount_percentage = money[1]
             if int(discount_percentage[:-1]) < thanks_percentage:
                 continue
             price_discount = money[2]
         except IndexError:
-            continue
+            discount_percentage = None
+            price_discount = None
+
         name = WebDriverWait(driver_sber, 1).until(EC.presence_of_element_located(
             (By.XPATH, f'{cards_path}[{index}]//*[@class="inner"]/div[@class="item-title"]'))).text
         link = WebDriverWait(driver_sber, 1).until(EC.presence_of_element_located(
@@ -185,6 +187,7 @@ if __name__ == '__main__':
 
     try:
         main(url, thanks_percentage, False)
+        time.sleep(60*60*12)
     except Exception as e:
         print(e)
         print(e.args)
