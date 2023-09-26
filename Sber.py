@@ -180,12 +180,12 @@ if __name__ == '__main__':
     # url = 'https://megamarket.ru/catalog/noutbuki/page-11/'
     # url = "https://megamarket.ru/catalog/igrovye-naushniki/page-7/"
     # thanks_percentage = 0
-    print('-'*100)
+    print('-'*95)
 
 
-    # try:
-    main(url, thanks_percentage, False)
-    # except Exception as e:
-    #     print(e)
-    #     print(e.args)
-    #     time.sleep(360)
+    try:
+        main(url, thanks_percentage, False)
+    except Exception as e:
+        print(e)
+        print(e.args)
+        time.sleep(60*5)
