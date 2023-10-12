@@ -17,18 +17,25 @@ def detect_block(driver):
     if driver.title == 'Ой!':
         while True:
             print('-' * 20, 'На сайте Яндекс Маркета подтвердите, что вы не робот!', '-' * 20)
+
+            try:
+                driver.find_element(By.XPATH, '//*[@class="CheckboxCaptcha-Anchor"]/input').click()
+            except:
+                pass
+            time.sleep(20)
+
             if driver.title != 'Ой!':
                 break
-            time.sleep(5)
 
 
 def refresh_site(func):
-    def wrapper(*args, **kwargs):
+    def wrapper(driver, *args):
         while True:
             try:
-                func(*args, **kwargs)
+                func(driver, *args)
                 break
-            except:
+            except Exception as ex:
+                print('[?]Refresh')
                 driver.refresh()
                 # func(*args, **kwargs)
                 time.sleep(5)
@@ -69,7 +76,13 @@ def get_first_match(driver):
     # Первое совпадение в списке
     driver.implicitly_wait(1)
     one_card = WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.XPATH, '//*[@data-index="1"]')))
-    url = one_card.find_element(By.XPATH, '//*[@data-autotest-id]/a').get_attribute('href')
+    url = one_card.find_element(By.XPATH, '//*[@data-autotest-id]/a') \
+        .get_attribute('href')
+    # first_match = driver.find_element(By.XPATH, '//*[@data-autotest-id]/a')
+    # first_match.click()
+    # match_windows = driver.window_handles[-1]
+    # driver.switch_to.window(match_windows)
+
     return url
 
 
@@ -84,20 +97,26 @@ def search_min_price_url(driver):
     time.sleep(1)
     # Предложения магазинов
     cards_xpath = '//*[@data-zone-name="snippetList"]/div'
-    cards = WebDriverWait(driver, 30).until(EC.presence_of_all_elements_located(
+    cards = WebDriverWait(driver, 60).until(EC.presence_of_all_elements_located(
         (By.XPATH, cards_xpath)))
 
     # data = {'name': [], 'price': [], 'urls': []}
 
     # for index in range(1, len(cards) + 1):
     index = 1
-    name = driver.find_element(By.XPATH, f'{cards_xpath}[{index}]//*[@data-zone-name="title"]').text
-    el = driver.find_element(By.XPATH, f'{cards_xpath}[{index}]//*[@data-zone-name="price"]/a')
+    name = WebDriverWait(driver, 30).until(EC.visibility_of_element_located(
+        (By.XPATH, f'{cards_xpath}[{index}]//*[@data-zone-name="title"]'))).text
+    el = WebDriverWait(driver, 30).until(EC.visibility_of_element_located(
+        (By.XPATH, f'{cards_xpath}[{index}]//*[@data-zone-name="price"]/a')))
     price = el.text.encode('ascii', 'ignore').decode("utf-8")
-    if len(price.split('\n')) == 4:
+    lenght_price = len(price.split('\n'))
+
+    if lenght_price == 4:
         price = price.split('\n')[3]
-    elif len(price.split('\n')) == 5:
+    elif lenght_price == 5:
         price = price.split('\n')[4]
+    elif lenght_price == 9:
+        price = price.split('\n')[3]
     url = WebDriverWait(driver, 3).until(EC.presence_of_element_located((
         By.XPATH, f'{cards_xpath}[{index}]//*[@data-zone-name="price"]/a'))) \
         .get_attribute('href')
@@ -111,16 +130,20 @@ def search_min_price_url(driver):
     return price, url, name
 
 
-def main(driver, text):
+def main(driver, text, old_flag: str):
     start_url = driver.current_url
     post_text_search(driver, text)
 
-    # Если не отработала post_text_search
-    while True:
-        post_text_search(driver, text)
-        if start_url != driver.current_url:
-            break
+    if old_flag == 'False':
+        if start_url == driver.current_url:
+            post_text_search(driver, text)
 
+    if old_flag == 'True':
+        # Если не отработала post_text_search
+        while True:
+            post_text_search(driver, text)
+            if start_url != driver.current_url:
+                break
     try:
         url = get_first_match(driver)
     except:
@@ -130,34 +153,65 @@ def main(driver, text):
         driver.refresh()
         url = get_first_match(driver)
 
-    driver.get(url)
     lock_out_market_problem(driver)
     detect_block(driver)
-    try:
-        # Все предложения
-        url_all_offers = driver.find_element \
-            (By.XPATH, '//*[@data-apiary-widget-name="@MarketNode/MorePricesLink"]//*[@href]') \
-            .get_attribute('href')
+    if old_flag == 'False':
+        try:
+            all_offers = driver.find_element(By.XPATH, '//*[@data-index="1"]//*[@data-zone-name="more-prices"]/a').text
+            if 'от' in all_offers:
+                all_offers = all_offers.split('от ')[-1]
+                min_price = all_offers.encode('ascii', 'ignore').decode("utf-8")
+            else:
+                price = driver.find_element(By.XPATH, '//*[@data-index="1"]//*[@data-auto="price-value"]').text
+                min_price = price.encode('ascii', 'ignore').decode("utf-8")
+        except NoSuchElementException:
+            try:
+                price = driver.find_element(By.XPATH, '//*[@data-index="1"]//*[@data-auto="price-value"]').text
+                min_price = price.encode('ascii', 'ignore').decode("utf-8")
+            except NoSuchElementException:
+                # Оплата яндекс картой
+                price = \
+                driver.find_element(By.XPATH, '//*[@data-index="1"]//*[@data-zone-name="price"]//h3').text.split(':')[1]
+                min_price = price.encode('ascii', 'ignore').decode("utf-8").replace('\n', '')
 
-        driver.get(url_all_offers)
+        name = driver.find_element(By.XPATH, '//*[@data-auto="snippet-title-header"]').text
+        min_url = url
+
+    elif old_flag == 'True':
+        driver.get(url)
         lock_out_market_problem(driver)
         detect_block(driver)
-
-        min_price, min_url, name = search_min_price_url(driver)
-        return min_price, min_url, name
-    except NoSuchElementException:
-        # Других предложений нет
-        min_url = url
         try:
-            min_price = driver.find_elements(
-                By.XPATH, '//*[@data-auto="price-value"]')[1] \
-                .text.replace('\u2009', '')
-        except IndexError:
-            min_price = 'Нет в продаже'
+            # Все предложения
+            url_all_offers = driver.find_element \
+                (By.XPATH, '//*[@data-apiary-widget-name="@MarketNode/MorePricesLink"]//*[@href]') \
+                # .get_attribute('href')
 
-        name = driver.find_element(By.XPATH, '//*[@data-additional-zone="title"]').text
+            # driver.get(url_all_offers)
+            url_all_offers.click()
+            lock_out_market_problem(driver)
+            detect_block(driver)
 
-        return min_price, min_url, name
+            min_price, min_url, name = search_min_price_url(driver)
+            return min_price, min_url, name
+        except NoSuchElementException:
+            # Других предложений нет
+            min_url = url
+            try:
+                min_price = driver.find_elements(
+                    By.XPATH, '//*[@data-auto="price-value"]')[1] \
+                    .text.replace('\u2009', '')
+            except IndexError:
+                min_price = 'Нет в продаже'
+
+            try:
+                name = WebDriverWait(driver, 10).until(EC.presence_of_element_located(
+                    (By.XPATH, '//*[@data-additional-zone="title"]'))).text
+            except TimeoutException:
+                detect_block(driver)
+                name = None
+
+    return min_price, min_url, name
 
 
 if __name__ == '__main__':
