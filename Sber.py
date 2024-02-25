@@ -21,6 +21,8 @@ config = configparser.ConfigParser()  # создаём объекта парсе
 config.read("settings.ini", encoding='utf-8')  # читаем конфиг
 
 old_flag = config['Yandex']['OLD_VERSION']
+WAIT_COUNTRY = int(config['SBER']['WAIT_FOR_COUNTRY'])
+
 
 @dataclass
 class Card:
@@ -57,8 +59,8 @@ def close_promo(driver: Chrome):
 @benchmark
 def get_cards_category(driver_sber: Chrome, driver_ya, url: str, thanks_percentage: int):
     driver_sber.get(url)
-    cards_path = '//*[@class="catalog-listing__items catalog-listing__items_divider"]/div[@id]'
-    cards = WebDriverWait(driver_sber, 30).until(EC.presence_of_all_elements_located(
+    cards_path = '//*[contains(@class, "catalog-item ")]'
+    cards = WebDriverWait(driver_sber, 15).until(EC.presence_of_all_elements_located(
         (By.XPATH, cards_path)))
     driver_sber.implicitly_wait(1)
     data = []
@@ -75,6 +77,7 @@ def get_cards_category(driver_sber: Chrome, driver_ya, url: str, thanks_percenta
         except IndexError:
             discount_percentage = None
             price_discount = None
+            continue
 
         name = WebDriverWait(driver_sber, 1).until(EC.presence_of_element_located(
             (By.XPATH, f'{cards_path}[{index}]//*[@class="inner"]/div[@class="item-title"]'))).text
@@ -114,10 +117,15 @@ def parse_url_filter(url):
 
 @benchmark
 def main(url, thanks_percentage, driver_sber=None, driver_ya=None, headless=True):
+    refresh_flag = False
     driver_sber = init_webdriver(headless)
     driver_sber.get(url)
     driver_sber.set_window_size(1920, 1080)
     driver_sber.implicitly_wait(1)
+
+    print(f"Ожидание выбора региона (секунды): {WAIT_COUNTRY} \n")
+    time.sleep(WAIT_COUNTRY)
+
     detect_blocked(driver_sber)
 
     url_ya = 'https://market.yandex.ru/'
@@ -133,8 +141,8 @@ def main(url, thanks_percentage, driver_sber=None, driver_ya=None, headless=True
     cycle = 0
     data = []
     while True:
-        # try:
-        cards = get_cards_category(driver_sber=driver_sber,
+        try:
+            cards = get_cards_category(driver_sber=driver_sber,
                                    driver_ya=driver_ya,
                                    url=url,
                                    thanks_percentage=thanks_percentage)
@@ -142,19 +150,27 @@ def main(url, thanks_percentage, driver_sber=None, driver_ya=None, headless=True
         #                            url=url,
         #                            thanks_percentage=thanks_percentage)
         # data.extend(cards)
-        # except:
-        # driver_sber.refresh()
+        except:
+            print('[?] Обновление страницы')
+            driver_sber.refresh()
+            cards = get_cards_category(driver_sber=driver_sber,
+                                       driver_ya=driver_ya,
+                                       url=url,
+                                       thanks_percentage=thanks_percentage)
         # # print(f'[-] Error parse page {cycle}')
         # cards = get_cards_category(driver_sber, driver_ya, url, thanks_percentage)
         # driver_sber.save_screenshot('get_cards_category.png')
         try:
             next_url = get_next_url(driver_sber)
         except TimeoutException:
-            print(f'Страница №{cycle}')
+            print(f'[-]Следующая ссылка не найдена')
             driver_sber.save_screenshot('get_next_url.png')
             break
 
-        url = next_url + '#' + filter
+        if filter:
+            url = next_url + '#' + filter
+        else:
+            url = next_url
         print('Количество товаров:', len(cards))
         cycle += 1
         print(f'Страница №{cycle}')
@@ -196,7 +212,7 @@ def use_undetecteble(url, thanks_percentage):
 
     driver_sber, browser_sb, profile_id_sb = init_driver('Yandex 2.0')
     driver_ya, brower_ya, profile_id_ya = init_driver('Yandex 2.0 RU')
-    main( url, thanks_percentage, False, driver_sber=driver_sber, driver_ya=driver_ya,)
+    main(url, thanks_percentage, False, driver_sber=driver_sber, driver_ya=driver_ya,)
 
     time.sleep(60)
     browser_sb.stop_profile(profile_id_sb)

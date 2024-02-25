@@ -18,6 +18,8 @@ def init_webdriver(headless=True):
     # chrome_options.add_argument('--start-fullscreen')
     chrome_options.add_argument("--window-size=1920x1080")
     chrome_options.add_argument("--disable-notifications")
+    # chrome_options.add_extension(r'C:\Users\user\Desktop\Projects\SberYandex_market\1.11.1_0.crx')
+
     # chrome_options.add_argument('--no-sandbox')
     # chrome_options.add_argument("--disable-popup-blocking")
     # chrome_options.add_argument('--disable-dev-shm-usage')
@@ -59,7 +61,7 @@ def init_webdriver(headless=True):
 
     driver = uc.Chrome(
         # driver_executable_path=get_chromedriver_fp(),
-        driver_executable_path=os.getcwd() + r'\chromedriver.exe',
+        # driver_executable_path=os.getcwd() + r'\chromedriver.exe',
         # browser_executable_path=r'C:\install\chrome-win64\chrome.exe',
         # executable_path=ChromeDriverManager().install(),
         options=chrome_options,
