@@ -72,12 +72,12 @@ def post_text_search(driver, text):
     lock_out_market_problem(driver)
 
 
-def get_first_match(driver):
+def get_first_match(driver, xpath_pattern):
     # Первое совпадение в списке
     driver.implicitly_wait(1)
-    one_card = WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.XPATH, '//*[@data-index="1"]')))
-    url = one_card.find_element(By.XPATH, '//*[@data-autotest-id]/a') \
-        .get_attribute('href')
+    one_card = WebDriverWait(driver, 10).until(EC.presence_of_element_located(
+        (By.XPATH, xpath_pattern)))
+    url = one_card.get_attribute('href')
     # first_match = driver.find_element(By.XPATH, '//*[@data-autotest-id]/a')
     # first_match.click()
     # match_windows = driver.window_handles[-1]
@@ -130,7 +130,7 @@ def search_min_price_url(driver):
     return price, url, name
 
 
-def main(driver, text, old_flag: str):
+def main(driver, text, old_flag: str, logger):
     start_url = driver.current_url
     post_text_search(driver, text)
 
@@ -144,14 +144,17 @@ def main(driver, text, old_flag: str):
             post_text_search(driver, text)
             if start_url != driver.current_url:
                 break
+
+    xpath_pattern = '//div[@data-auto="SerpList"]/div[@data-apiary-widget-name][2]//a[@data-auto and @href]'
     try:
-        url = get_first_match(driver)
+        url = get_first_match(driver, xpath_pattern)
     except:
+        logger.error('Не найдено совпадений')
         detect_block(driver)
         lock_out_market_problem(driver)
         driver.save_screenshot('get_first_match.png')
         driver.refresh()
-        url = get_first_match(driver)
+        url = get_first_match(driver, xpath_pattern)
 
     lock_out_market_problem(driver)
     detect_block(driver)
@@ -165,16 +168,17 @@ def main(driver, text, old_flag: str):
                 price = driver.find_element(By.XPATH, '//*[@data-index="1"]//*[@data-auto="price-value"]').text
                 min_price = price.encode('ascii', 'ignore').decode("utf-8")
         except NoSuchElementException:
+            # Других предложений нет
             try:
                 price = driver.find_element(By.XPATH, '//*[@data-index="1"]//*[@data-auto="price-value"]').text
                 min_price = price.encode('ascii', 'ignore').decode("utf-8")
             except NoSuchElementException:
                 # Оплата яндекс картой
-                price = \
-                driver.find_element(By.XPATH, '//*[@data-index="1"]//*[@data-zone-name="price"]//h3').text.split(':')[1]
-                min_price = price.encode('ascii', 'ignore').decode("utf-8").replace('\n', '')
+                price_text = driver.find_element(By.XPATH, xpath_pattern + '/span/span').text
 
-        name = driver.find_element(By.XPATH, '//*[@data-auto="snippet-title-header"]').text
+                min_price = price_text.encode('ascii', 'ignore').decode("utf-8").replace('\n', '')
+                min_price = min_price.strip()
+        name = driver.find_elements(By.XPATH, xpath_pattern)[1].text
         min_url = url
 
     elif old_flag == 'True':

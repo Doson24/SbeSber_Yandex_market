@@ -16,12 +16,15 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from save_DB import save_db
 from YandexMarket import main as get_min_price
 import configparser
+from loguru import logger
 
 config = configparser.ConfigParser()  # создаём объекта парсера
 config.read("settings.ini", encoding='utf-8')  # читаем конфиг
 
 old_flag = config['Yandex']['OLD_VERSION']
 WAIT_COUNTRY = int(config['SBER']['WAIT_FOR_COUNTRY'])
+
+logger.add("file.log", format="{time} {level} {message}", level="INFO")
 
 
 @dataclass
@@ -48,16 +51,22 @@ def close_promo(driver: Chrome):
     :param driver:
     :return:
     """
-    iframe = driver.find_element(By.ID, 'fl-728255')
-    driver.switch_to.frame(iframe)
-    driver.find_elements(By.XPATH, '//*[@class="widget__close"]')
-    close = driver.find_element(By.XPATH, '//*[@class="widget__close"]')
-    close.click()
-    driver.switch_to.default_content()
+    logger.info("Attempting to close promo")
+    try:
+        iframe = driver.find_element(By.ID, 'fl-728255')
+        driver.switch_to.frame(iframe)
+        driver.find_elements(By.XPATH, '//*[@class="widget__close"]')
+        close = driver.find_element(By.XPATH, '//*[@class="widget__close"]')
+        close.click()
+        driver.switch_to.default_content()
+        logger.info("Promo closed successfully")
+    except Exception as e:
+        logger.error(f"Window promo not found")
 
 
 @benchmark
 def get_cards_category(driver_sber: Chrome, driver_ya, url: str, thanks_percentage: int):
+    logger.info("get_cards_category function started")
     driver_sber.get(url)
     cards_path = '//*[contains(@class, "catalog-item ")]'
     cards = WebDriverWait(driver_sber, 15).until(EC.presence_of_all_elements_located(
@@ -65,10 +74,17 @@ def get_cards_category(driver_sber: Chrome, driver_ya, url: str, thanks_percenta
     driver_sber.implicitly_wait(1)
     data = []
     for index in range(1, len(cards) + 1):
-        money = WebDriverWait(driver_sber, 1).until(EC.presence_of_element_located(
-            (By.XPATH, f'{cards_path}[{index}]//*[@class="item-money"]'))).text
-        money = money.split('\n')
-        price = money[0].replace(' ', '').replace('₽', '')
+        try:
+            money = WebDriverWait(driver_sber, 1).until(EC.presence_of_element_located(
+                (By.XPATH, f'{cards_path}[{index}]//*[@class="item-money"]'))).text
+            try:
+                money = money.split('\n')
+            except:
+                pass
+            price = money[0].replace(' ', '').replace('₽', '')
+        except:
+            logger.warning('Ошибка при получении данных Price')
+            continue
         try:
             discount_percentage = money[1]
             if int(discount_percentage[:-1]) < thanks_percentage:
@@ -79,13 +95,21 @@ def get_cards_category(driver_sber: Chrome, driver_ya, url: str, thanks_percenta
             price_discount = None
             continue
 
-        name = WebDriverWait(driver_sber, 1).until(EC.presence_of_element_located(
-            (By.XPATH, f'{cards_path}[{index}]//*[@class="inner"]/div[@class="item-title"]'))).text
-        link = WebDriverWait(driver_sber, 1).until(EC.presence_of_element_located(
-            (By.XPATH, f'{cards_path}[{index}]//a'))).get_attribute('href')
+        try:
+            name = WebDriverWait(driver_sber, 1).until(EC.presence_of_element_located(
+                (By.XPATH, f'{cards_path}[{index}]//*[@class="inner"]/div[@class="item-title"]'))).text
+            link = WebDriverWait(driver_sber, 1).until(EC.presence_of_element_located(
+                (By.XPATH, f'{cards_path}[{index}]//a'))).get_attribute('href')
+        except:
+            logger.error('Ошибка при получении данных Name, link')
+            continue
 
         # Работа яднекс маркета
-        yandex_price, yandex_url, name_ya = get_min_price(driver_ya, name, old_flag)
+        try:
+            yandex_price, yandex_url, name_ya = get_min_price(driver_ya, name, old_flag, logger)
+        except Exception as ex:
+            logger.error(f'Ошибка при получении данных с Яндекс Маркета {ex}')
+            yandex_price, yandex_url, name_ya = None, None, None
         # yandex_price, yandex_url, name_ya = '','', name
 
         card = Card(name_sber=name,
@@ -97,16 +121,22 @@ def get_cards_category(driver_sber: Chrome, driver_ya, url: str, thanks_percenta
                     price_ya=yandex_price,
                     yandex_url=yandex_url
                     )
-        # card = Card(name.text, link, money)
-        print(card)
+        logger.info(f"Card created: {card}")
         data.append(card)
+    logger.info("get_cards_category function ended")
     return data
 
 
 def get_next_url(driver):
-    url = WebDriverWait(driver, 30).until(EC.presence_of_element_located(
-        (By.XPATH, '//*[@class="next"]/a[@href]'))) \
-        .get_attribute('href')
+    logger.info("get_next_url function started")
+    try:
+        url = WebDriverWait(driver, 30).until(EC.presence_of_element_located(
+            (By.XPATH, '//*[@class="next"]/a[@href]'))) \
+            .get_attribute('href')
+        logger.info(f"Next URL retrieved: {url}")
+    except Exception as e:
+        logger.error(f"An error occurred while getting next URL: {e}")
+        url = None
     return url
 
 
@@ -117,13 +147,14 @@ def parse_url_filter(url):
 
 @benchmark
 def main(url, thanks_percentage, driver_sber=None, driver_ya=None, headless=True):
+    logger.add("file.log", format="{time} {level} {message}", level="INFO")
     refresh_flag = False
     driver_sber = init_webdriver(headless)
     driver_sber.get(url)
     driver_sber.set_window_size(1920, 1080)
     driver_sber.implicitly_wait(1)
 
-    print(f"Ожидание выбора региона (секунды): {WAIT_COUNTRY} \n")
+    logger.info(f"Ожидание выбора региона (секунды): {WAIT_COUNTRY}")
     time.sleep(WAIT_COUNTRY)
 
     detect_blocked(driver_sber)
@@ -133,37 +164,37 @@ def main(url, thanks_percentage, driver_sber=None, driver_ya=None, headless=True
     driver_ya.get(url_ya)
     driver_ya.set_window_size(1920, 1080)
 
+    close_promo(driver_sber)
+
     try:
-        close_promo(driver_sber)
-    except:
-        pass
-    filter = parse_url_filter(url)
+        filter = parse_url_filter(url)
+    except Exception as ex:
+        logger.error('Ошибка при выделения url фильтра')
+        raise Exception(ex)
+
     cycle = 0
     data = []
     while True:
         try:
             cards = get_cards_category(driver_sber=driver_sber,
-                                   driver_ya=driver_ya,
-                                   url=url,
-                                   thanks_percentage=thanks_percentage)
-        # cards = get_cards_category(driver_sber=driver_sber,
-        #                            url=url,
-        #                            thanks_percentage=thanks_percentage)
-        # data.extend(cards)
-        except:
-            print('[?] Обновление страницы')
-            driver_sber.refresh()
-            cards = get_cards_category(driver_sber=driver_sber,
                                        driver_ya=driver_ya,
                                        url=url,
                                        thanks_percentage=thanks_percentage)
-        # # print(f'[-] Error parse page {cycle}')
-        # cards = get_cards_category(driver_sber, driver_ya, url, thanks_percentage)
-        # driver_sber.save_screenshot('get_cards_category.png')
+        except:
+            logger.warning('[?] Обновление страницы')
+            driver_sber.refresh()
+            try:
+                cards = get_cards_category(driver_sber=driver_sber,
+                                           driver_ya=driver_ya,
+                                           url=url,
+                                           thanks_percentage=thanks_percentage)
+            except Exception as ex:
+                logger.error(f'Ошибка при получении данных товаров {ex}')
+                cards = []
         try:
             next_url = get_next_url(driver_sber)
         except TimeoutException:
-            print(f'[-]Следующая ссылка не найдена')
+            logger.error(f'[-]Следующая ссылка не найдена')
             driver_sber.save_screenshot('get_next_url.png')
             break
 
@@ -171,69 +202,84 @@ def main(url, thanks_percentage, driver_sber=None, driver_ya=None, headless=True
             url = next_url + '#' + filter
         else:
             url = next_url
-        print('Количество товаров:', len(cards))
+        logger.info(f'Количество товаров: {len(cards)}')
         cycle += 1
-        print(f'Страница №{cycle}')
+        logger.info(f'Страница №{cycle}')
 
         if len(cards) > 0:
             data = pd.DataFrame(cards)
             save_db(data,
                     path='Sber.db',
                     table_name='Sber',
-                    # print_column=['name', 'money']
                     )
 
 
 def detect_blocked(driver_sber):
+    logger.info("detect_blocked function started")
     if driver_sber.title == 'Ой. Запросы с вашего устройства похожи на автоматически':
-        print(f"{'-' * 20}Обранаружен блокировщик!!!{'-' * 20}\n"
-              "[?]На сайте Введите код с картинки \n ")
+        logger.warning(f"{'-' * 20}Обранаружен блокировщик!!!{'-' * 20}\n"
+                       "[?]На сайте Введите код с картинки \n ")
         while True:
             time.sleep(1)
             if driver_sber.title != 'Ой. Запросы с вашего устройства похожи на автоматически':
-                print("[+] Код с картинки успешно введен")
+                logger.info("[+] Код с картинки успешно введен")
                 break
+    logger.info("detect_blocked function ended")
 
 
 def init_driver(name_profile='Amazon 1.1 Windows Juan'):
+    logger.info("init_driver function started")
     address = "127.0.0.1"  # Local API IP address (if you work from another PC on the same network or a port is open in the router settings, you can access the local API remotely and this address will need to be changed)
     port_from_settings_browser = '25325'  # Local API port (can be found in the program settings)
     chrome_driver_path = "chromedriver.exe"  # Path to chromedriver for v110
-    # name_profile = 'Amazon 1.1 Windows Juan'
 
+    logger.info(
+        f"Initializing Undectable with address: {address}, port: {port_from_settings_browser}, and chrome driver path: {chrome_driver_path}")
     browser = Undectable(address, port_from_settings_browser, chrome_driver_path)
     profile_id = browser.get_id_by_name(name_profile)
     debug_port = browser.get_debug_port(profile_id)
     driver = browser.start_driver(debug_port)
+    logger.info(f"Driver initialized with profile ID: {profile_id} and debug port: {debug_port}")
+    logger.info("init_driver function ended")
     return driver, browser, profile_id
 
 
 def use_undetecteble(url, thanks_percentage):
-
+    logger.info("use_undetecteble function started")
     driver_sber, browser_sb, profile_id_sb = init_driver('Yandex 2.0')
+    logger.info("Driver for Sber initialized")
     driver_ya, brower_ya, profile_id_ya = init_driver('Yandex 2.0 RU')
-    main(url, thanks_percentage, False, driver_sber=driver_sber, driver_ya=driver_ya,)
+    logger.info("Driver for Yandex initialized")
+    main(url, thanks_percentage, False, driver_sber=driver_sber, driver_ya=driver_ya, )
 
+    logger.info("Sleeping for 60 seconds")
     time.sleep(60)
     browser_sb.stop_profile(profile_id_sb)
+    logger.info("Profile for Sber stopped")
     brower_ya.stop_profile(profile_id_ya)
+    logger.info("Profile for Yandex stopped")
+    logger.info("use_undetecteble function ended")
 
 
 if __name__ == '__main__':
-    multiprocessing.freeze_support()
 
+    multiprocessing.freeze_support()
+    # url = 'https://megamarket.ru/catalog/smartfony-android/#?filters=%7B%22EA7C286463713C534F6A892BFF2CE0D0%22%3A%7B%22min%22%3A128%7D%7D'
     url = str(input('Введите url адрес: '))
     thanks_percentage = int(input("Введите мин % СберСпасибо: "))
-    # url = 'https://megamarket.ru/catalog/noutbuki/page-13/'
-    # url = 'https://megamarket.ru/catalog/posudomoechnye-mashiny/page-2/'
-    # thanks_percentage = 0
+    logger.info(f"URL entered: {url}")
+    logger.info(f"Minimum percentage entered: {thanks_percentage}")
+
     print('-' * 95)
 
-    # try:
-    # use_undetecteble(url, thanks_percentage)
-    main(url, thanks_percentage, headless=False)
-    time.sleep(60 * 60 * 12)
-    # except Exception as e:
-    #     # print(e)
-    #     # print(e.args)
-    #     time.sleep(60 * 5)
+    try:
+        logger.info("Starting main function")
+        main(url, thanks_percentage, headless=False)
+        logger.info("Main function ended successfully")
+        logger.info("Sleeping for 12 hours")
+        time.sleep(60 * 60 * 12)
+    except Exception as e:
+        logger.error(f"An error occurred: {e}")
+        logger.info("Sleeping for 12 hours")
+
+        time.sleep(60 * 60 * 12)
