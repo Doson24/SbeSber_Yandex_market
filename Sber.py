@@ -130,7 +130,7 @@ def get_cards_category(driver_sber: Chrome, driver_ya, url: str, thanks_percenta
 def get_next_url(driver):
     logger.info("get_next_url function started")
     try:
-        url = WebDriverWait(driver, 30).until(EC.presence_of_element_located(
+        url = WebDriverWait(driver, 10).until(EC.presence_of_element_located(
             (By.XPATH, '//*[@class="next"]/a[@href]'))) \
             .get_attribute('href')
         logger.info(f"Next URL retrieved: {url}")
@@ -198,10 +198,12 @@ def main(url, thanks_percentage, driver_sber=None, driver_ya=None, headless=True
             driver_sber.save_screenshot('get_next_url.png')
             break
 
-        if filter:
-            url = next_url + '#' + filter
-        else:
-            url = next_url
+        if next_url:
+            if filter:
+                url = next_url + '#' + filter
+            else:
+                url = next_url
+
         logger.info(f'Количество товаров: {len(cards)}')
         cycle += 1
         logger.info(f'Страница №{cycle}')

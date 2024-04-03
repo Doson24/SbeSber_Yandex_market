@@ -12,6 +12,8 @@ from benchmark import benchmark
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
+LIST_VIEW = True
+
 
 def detect_block(driver):
     if driver.title == 'Ой!':
@@ -133,6 +135,13 @@ def search_min_price_url(driver):
 def main(driver, text, old_flag: str, logger):
     start_url = driver.current_url
     post_text_search(driver, text)
+    driver.implicitly_wait(1)
+
+    global LIST_VIEW
+    if LIST_VIEW:
+        driver.find_element(By.XPATH, '//*[@name="viewType"]').click()
+        driver.implicitly_wait(1)
+        LIST_VIEW = False
 
     if old_flag == 'False':
         if start_url == driver.current_url:
@@ -174,7 +183,7 @@ def main(driver, text, old_flag: str, logger):
                 min_price = price.encode('ascii', 'ignore').decode("utf-8")
             except NoSuchElementException:
                 # Оплата яндекс картой
-                price_text = driver.find_element(By.XPATH, xpath_pattern + '/span/span').text
+                price_text = driver.find_element(By.XPATH, xpath_pattern + '//span/span').text
 
                 min_price = price_text.encode('ascii', 'ignore').decode("utf-8").replace('\n', '')
                 min_price = min_price.strip()
