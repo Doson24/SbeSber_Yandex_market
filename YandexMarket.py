@@ -1,3 +1,4 @@
+import re
 import time
 
 from selenium.common import NoSuchElementException, TimeoutException
@@ -16,7 +17,7 @@ LIST_VIEW = True
 
 
 def detect_block(driver):
-    if driver.title == 'Ой!':
+    if 'Ой' in driver.title:
         while True:
             print('-' * 20, 'На сайте Яндекс Маркета подтвердите, что вы не робот!', '-' * 20)
 
@@ -26,7 +27,7 @@ def detect_block(driver):
                 pass
             time.sleep(20)
 
-            if driver.title != 'Ой!':
+            if 'Ой' not in driver.title:
                 break
 
 
@@ -154,7 +155,9 @@ def main(driver, text, old_flag: str, logger):
             if start_url != driver.current_url:
                 break
 
-    xpath_pattern = '//div[@data-auto="SerpList"]/div[@data-apiary-widget-name][2]//a[@data-auto and @href]'
+    # xpath_pattern = '//div[@data-auto="SerpList"]/div[@data-apiary-widget-name][2]//a[@data-auto and @href]'
+    # xpath_pattern = '//article[@data-autotest-id="product-snippet"]//h3[@data-auto="snippet-price-current"]'
+    xpath_pattern = '//article//a[@data-auto]'
     try:
         url = get_first_match(driver, xpath_pattern)
     except:
@@ -169,6 +172,7 @@ def main(driver, text, old_flag: str, logger):
     detect_block(driver)
     if old_flag == 'False':
         try:
+            # Все предложения
             all_offers = driver.find_element(By.XPATH, '//*[@data-index="1"]//*[@data-zone-name="more-prices"]/a').text
             if 'от' in all_offers:
                 all_offers = all_offers.split('от ')[-1]
@@ -185,9 +189,11 @@ def main(driver, text, old_flag: str, logger):
                 # Оплата яндекс картой
                 price_text = driver.find_element(By.XPATH, xpath_pattern + '//span/span').text
 
-                min_price = price_text.encode('ascii', 'ignore').decode("utf-8").replace('\n', '')
-                min_price = min_price.strip()
-        name = driver.find_elements(By.XPATH, xpath_pattern)[1].text
+                pattern = r'\d{1,3}(?:\s\d{3})*'
+                matches = re.findall(pattern, price_text)
+                prices = [int(match.encode('ascii', 'ignore').decode("utf-8").replace(' ', '')) for match in matches]
+                min_price = prices[0]
+        name = driver.find_element(By.XPATH, xpath_pattern+'//h3').text
         min_url = url
 
     elif old_flag == 'True':
