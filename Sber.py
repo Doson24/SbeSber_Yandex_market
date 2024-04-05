@@ -142,13 +142,13 @@ def get_next_url(driver):
 
 def parse_url_filter(url):
     parsed_url = urlparse(url)
-    return parsed_url.fragment
+    return "?" + parsed_url.query + '#' + parsed_url.fragment
 
 
 @benchmark
 def main(url, thanks_percentage, driver_sber=None, driver_ya=None, headless=True):
     logger.add("file.log", format="{time} {level} {message}", level="INFO")
-    refresh_flag = False
+    # refresh_flag = False
     driver_sber = init_webdriver(headless)
     driver_sber.get(url)
     driver_sber.set_window_size(1920, 1080)
@@ -200,7 +200,7 @@ def main(url, thanks_percentage, driver_sber=None, driver_ya=None, headless=True
 
         if next_url:
             if filter:
-                url = next_url + '#' + filter
+                url = next_url + filter
             else:
                 url = next_url
 
