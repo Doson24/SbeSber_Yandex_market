@@ -1,7 +1,7 @@
 import multiprocessing
 import time
 from undetectable import Undectable
-from driver import init_webdriver
+from driver import init_webdriver, load_cookies, save_cookies
 from selenium.webdriver.common.by import By
 from datetime import datetime
 from selenium.webdriver.common.keys import Keys
@@ -164,6 +164,9 @@ def main(url, thanks_percentage, driver_sber=None, driver_ya=None, headless=True
     driver_ya.get(url_ya)
     driver_ya.set_window_size(1920, 1080)
 
+    load_cookies(driver_sber, 'cookies_sber.pkl')
+    load_cookies(driver_ya, 'cookies_ya.pkl')
+
     close_promo(driver_sber)
 
     try:
@@ -208,6 +211,9 @@ def main(url, thanks_percentage, driver_sber=None, driver_ya=None, headless=True
         cycle += 1
         logger.info(f'Страница №{cycle}')
 
+        save_cookies(driver_sber, 'cookies_sber.pkl')
+        save_cookies(driver_ya, 'cookies_ya.pkl')
+
         if len(cards) > 0:
             data = pd.DataFrame(cards)
             save_db(data,
@@ -221,6 +227,7 @@ def detect_blocked(driver_sber):
     if driver_sber.title == 'Ой. Запросы с вашего устройства похожи на автоматически':
         logger.warning(f"{'-' * 20}Обранаружен блокировщик!!!{'-' * 20}\n"
                        "[?]На сайте Введите код с картинки \n ")
+        driver_sber.save_screenshot('Block.png')
         while True:
             time.sleep(1)
             if driver_sber.title != 'Ой. Запросы с вашего устройства похожи на автоматически':

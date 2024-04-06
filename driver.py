@@ -10,6 +10,27 @@ import undetected_chromedriver as uc
 from selenium.webdriver.chrome.service import Service as ChromeService
 from chrome_driver_downloder import get_chromedriver_fp
 
+import pickle
+
+
+def save_cookies(driver, location):
+    pickle.dump(driver.get_cookies(), open(location, "wb"))
+
+
+def load_cookies(driver, location, url=None):
+    # Проверить существует ли файл location
+    if not os.path.exists(location):
+        return False
+
+    cookies = pickle.load(open(location, "rb"))
+    driver.delete_all_cookies()
+    # have to be on a page before you can add any cookies, any page - does not matter which
+    driver.get("https://www.google.com" if url is None else url)
+    for cookie in cookies:
+        if 'expiry' in cookie:
+            del cookie['expiry']
+        driver.add_cookie(cookie)
+
 
 def init_webdriver(headless=True):
     chrome_options = Options()
@@ -18,46 +39,13 @@ def init_webdriver(headless=True):
     # chrome_options.add_argument('--start-fullscreen')
     chrome_options.add_argument("--window-size=1920x1080")
     chrome_options.add_argument("--disable-notifications")
-    # chrome_options.add_extension(r'C:\Users\user\Desktop\Projects\SberYandex_market\1.11.1_0.crx')
-
-    # chrome_options.add_argument('--no-sandbox')
-    # chrome_options.add_argument("--disable-popup-blocking")
-    # chrome_options.add_argument('--disable-dev-shm-usage')
-    # chrome_options.add_argument("--log-level=3")
-    #
-    # chrome_options.add_argument("--disable-gpu")
-    # chrome_options.add_argument("--disable-crash-reporter")
-    # chrome_options.add_argument("--disable-extensions")
-    # chrome_options.add_argument("--disable-in-process-stack-traces")
-    # chrome_options.add_argument("--disable-logging")
-    # chrome_options.add_argument("--disable-dev-shm-usage")
-    # chrome_options.add_argument("--log-level=3")
-    # chrome_options.add_argument("--output=/dev/null")
-
-    """
-    Загрузка файлов в указаную директорию
-
-    chrome_options.add_argument("download.default_directory=C:/install") # Возможно не работает
-    chrome_options.add_experimental_option("prefs", {
-        "download.default_directory": "C:\\Users\\user\\Desktop\\Projects\\Restate.ru\\data",
-        "download.prompt_for_download": False,
-        "download.directory_upgrade": True,
-        "safebrowsing_for_trusted_sources_enabled": False,
-        "safebrowsing.enabled": False
-    })"""
-    # в режиме headless без user-agent не загружает страницу
-
-    """
-    Fake user-agent
-"""
-
-    def install_version():
-        ChromeDriverManager(
-            latest_release_url='https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/113.0.5672.63/win64/chromedriver-win64.zip').install()
-
-    # ua = UserAgent()
-    # ua_random = ua.random
-    # chrome_options.add_argument(f"user-agent={ua_random}")
+    # стандартные аргументы для обхода защиты
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_argument("--disable-extensions")
+    chrome_options.add_argument("--disable-popup-blocking")
+    chrome_options.add_argument("--disable-web-security")
+    chrome_options.add_argument("--ignore-certificate-errors")
+    chrome_options.add_argument("--no-sandbox")
 
     driver = uc.Chrome(
         # driver_executable_path=get_chromedriver_fp(),
