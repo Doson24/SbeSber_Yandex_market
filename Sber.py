@@ -213,6 +213,7 @@ def main(url, thanks_percentage, driver_sber=None, driver_ya=None, headless=True
 
         save_cookies(driver_sber, 'cookies_sber.pkl')
         save_cookies(driver_ya, 'cookies_ya.pkl')
+        logger.info('Cookies сохранены')
 
         if len(cards) > 0:
             data = pd.DataFrame(cards)
@@ -283,7 +284,7 @@ if __name__ == '__main__':
 
     try:
         logger.info("Starting main function")
-        main(url, thanks_percentage, headless=False)
+        main(url, thanks_percentage, headless=True)
         logger.info("Main function ended successfully")
         logger.info("Sleeping for 12 hours")
         time.sleep(60 * 60 * 12)
