@@ -39,13 +39,15 @@ def init_webdriver(headless=True):
     # chrome_options.add_argument('--start-fullscreen')
     chrome_options.add_argument("--window-size=1920x1080")
     chrome_options.add_argument("--disable-notifications")
-    # стандартные аргументы для обхода защиты
-    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+
     chrome_options.add_argument("--disable-extensions")
     chrome_options.add_argument("--disable-popup-blocking")
     chrome_options.add_argument("--disable-web-security")
     chrome_options.add_argument("--ignore-certificate-errors")
     chrome_options.add_argument("--no-sandbox")
+
+    chrome_options.add_argument("--disable-blink-features")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
 
     driver = uc.Chrome(
         # driver_executable_path=get_chromedriver_fp(),
@@ -55,4 +57,10 @@ def init_webdriver(headless=True):
         options=chrome_options,
         use_subprocess=False,
     )
+    params = {
+        "source": "Object.defineProperty(navigator, 'webdriver', { get: () => undefined })"
+    }
+
+    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", params)
+
     return driver
